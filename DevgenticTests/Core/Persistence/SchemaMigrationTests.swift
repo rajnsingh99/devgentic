@@ -820,8 +820,14 @@ final class SchemaMigrationTests: XCTestCase {
             storeURL: storeURL,
             columns: [(table: "ZPROMPTMODEL", column: "ZTITLE")]
         )
+        // Sizes ride along in the failure message: this test has failed in full runs only (never alone),
+        // and whether the rows sat in the -wal or never reached the file is what tells the two causes apart.
+        func size(_ suffix: String) -> Int {
+            ((try? FileManager.default.attributesOfItem(atPath: storeURL.path + suffix)[.size]) as? Int) ?? -1
+        }
+        let storeState = "store=\(size("")) wal=\(size("-wal")) shm=\(size("-shm")) report=\(report.summary)"
 
-        XCTAssertFalse(report.isClean, "Two prompts share a title — constraining it would brick this store.")
+        XCTAssertFalse(report.isClean, "Two prompts share a title — constraining it would brick this store. \(storeState)")
         XCTAssertEqual(report.offendingColumns["ZPROMPTMODEL.ZTITLE"], 1,
                        "One VALUE is duplicated (not two rows) — the report counts values, not rows.")
         XCTAssertTrue(report.summary.contains("ZPROMPTMODEL.ZTITLE"))

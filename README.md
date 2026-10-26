@@ -1,7 +1,22 @@
-# Devgentic
+<p align="center">
+  <img src="https://rajnsingh99.github.io/devgentic/assets/app-icon.png" alt="Devgentic app icon" width="128" height="128">
+</p>
 
-[![Licence: AGPL v3](https://img.shields.io/badge/Licence-AGPL_v3-blue.svg)](LICENSE)
-[![Platform: macOS 26.1+](https://img.shields.io/badge/Platform-macOS%2026.1%2B-lightgrey.svg)](#requirements)
+<h1 align="center">Devgentic</h1>
+
+<p align="center"><strong>Local-first AI agents for your Mac</strong></p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/Licence-AGPL_v3-blue.svg" alt="Licence: AGPL v3"></a>
+  <a href="#requirements"><img src="https://img.shields.io/badge/Platform-macOS%2026.1%2B-lightgrey.svg" alt="Platform: macOS 26.1+"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/rajnsingh99/devgentic/releases/latest">Download</a> ·
+  <a href="https://rajnsingh99.github.io/devgentic/">Website</a> ·
+  <a href="https://github.com/rajnsingh99/devgentic/issues/new/choose">Report a bug</a> ·
+  <a href="https://github.com/sponsors/rajnsingh99">Sponsor</a>
+</p>
 
 A native macOS app for building and running AI agents — locally where you want it, in the cloud where you need it.
 
@@ -9,7 +24,7 @@ You create **backend profiles**. Each one binds a model to a set of capabilities
 
 A developer's map of how the app is put together — components, key flows, persistence, security model — is in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
-> **Version 1.0.0 — the first public release.** Free software under the GNU AGPL v3 — see [Licence](#licence) — and please [read this first](#before-you-use-this).
+> **Version 1.0.1.** Free software under the GNU AGPL v3 — see [Licence](#licence) — and please [read this first](#before-you-use-this).
 
 ## What it does
 

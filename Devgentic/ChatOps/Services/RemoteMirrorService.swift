@@ -359,7 +359,8 @@ final class RemoteMirrorService: ActiveStreamMirrorDelegate {
                 hitlType = .planReview(subtaskDescriptions: p.subtasks.map(\.description))
             case .gate(let g):
                 // Real gate prompt: one tappable button per option; a tap routes back through `hitl:gate:<opID>:<idx>`.
-                // A Router's input text is folded into the prompt, since remote platforms cannot render the highlight spans.
+                // The input text (a Router's or a Gate node's) is folded into the prompt, since remote platforms cannot render the
+                // highlight spans.
                 let remotePrompt: String = {
                     guard let input = g.inputText, !input.isEmpty else { return g.prompt }
                     return "\(g.prompt)\n\n\(input)"

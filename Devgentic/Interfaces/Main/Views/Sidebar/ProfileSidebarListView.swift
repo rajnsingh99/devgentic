@@ -168,6 +168,9 @@ struct ProfileSidebarListView: View {
                                     onDelete: {
                                         profileToDelete = profile
                                         showingDeleteAlert = true
+                                    },
+                                    onRename: { newName in
+                                        renameProfile(profile, to: newName)
                                     }
                                 )
                                 .id(profile.id)
@@ -313,6 +316,17 @@ struct ProfileSidebarListView: View {
             showingDiscardAlert = true
         } else {
             router.navigateToProfile(profile.id, activatingBufferOn: profileService)
+        }
+    }
+
+    /// Returns false on a refused rename (empty, duplicate, or a failed write) so the row keeps its field open.
+    private func renameProfile(_ profile: BackendProfileModel, to newName: String) -> Bool {
+        do {
+            try profileService.renameProfile(withId: profile.id, to: newName)
+            return true
+        } catch {
+            toastManager.show(error.localizedDescription, style: .error)
+            return false
         }
     }
 

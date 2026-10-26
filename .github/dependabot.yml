@@ -1,0 +1,8 @@
+# Keeps the GitHub Actions this repository uses up to date. Because the CLA workflow pins its action to
+# a commit SHA, Dependabot is what proposes the new SHA when a release comes out.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

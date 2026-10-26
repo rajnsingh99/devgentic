@@ -62,7 +62,12 @@ final class SharedContextCommitTests: XCTestCase {
         XCTAssertThrowsError(try context.save(), "…yet the poison still fails the next save. If this now SUCCEEDS, rollback works on this SDK — revisit RAG-27.")
     }
 
-    func testRollbackAfterAFailedSaveDoesNotRestoreAChangedValue() throws {
+    /// What rollback does to an in-memory edit differs by OS: macOS 26 leaves the edited value (99);
+    /// macOS 27 restores the committed one (1). RAG-27 does not depend on which — it depends on the
+    /// poison surviving the rollback (`testRollbackAfterAFailedSaveDoesNotClearThePoison`), which
+    /// holds on both. So this pins the two known outcomes and fails on a THIRD, i.e. a new platform
+    /// behaviour worth a look.
+    func testRollbackAfterAFailedSaveLeavesTheEditedValueOnlyOnOlderSDKs() throws {
         let context = try mainContext()
         let kept = PoisonChildSD(n: 1)
         context.insert(kept)
@@ -72,7 +77,12 @@ final class SharedContextCommitTests: XCTestCase {
         context.insert(PoisonParentSD(name: "poison"))
         XCTAssertThrowsError(try context.save())
         context.rollback()
-        XCTAssertEqual(kept.n, 99, "rollback restored the value — SwiftData's rollback works on this SDK; revisit RAG-27")
+        let knownOutcomes: Set<Int> = [
+            99, // macOS 26: the edit survives the rollback
+            1,  // macOS 27: the rollback restores the committed value
+        ]
+        XCTAssertTrue(knownOutcomes.contains(kept.n),
+                      "rollback left n == \(kept.n), a behaviour neither known SDK shows — revisit RAG-27")
     }
 
     /// Recovery exists — in a context the poison never entered.

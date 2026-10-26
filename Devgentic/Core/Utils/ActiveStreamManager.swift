@@ -443,6 +443,8 @@ final class ActiveStreamManager {
         // The run's identity travels with it: local providers report which run touched a model via `LocalInferenceScope.runID`.
         let streamTask = WorkflowRunAttendance.$isAttended.withValue(attended) {
             WorkflowRunAttendance.$origin.withValue(userMessage.messageSource) {
+            // Run-scoped tool approvals ("allow for this run") match on this id, the one a banner carries as `runMessageID`.
+            ToolApprovalRun.$id.withValue(agentMessage.id) {
             LocalInferenceScope.$runID.withValue(agentMessage.id) {
             Task { [weak self] in
             guard let self = self else { return }
@@ -1183,6 +1185,7 @@ final class ActiveStreamManager {
         }
         }
         }
+        }
         
         activeTasks[agentMessage.id] = streamTask
         
@@ -1852,6 +1855,9 @@ final class ActiveStreamManager {
         // Every run end comes through here (finished, failed, cancelled); idempotent for a run that
         // never registered (cancelled while queued behind its conversation).
         inferenceCoordinator.unregister(runID: message.id)
+        // The run's "allow for this run" grants end with it. Hygiene only: they are keyed by this run's id, so the next run
+        // could not match them anyway.
+        Task { await SessionToolApprovals.shared.endRun(conversationID: conversationID, runID: message.id) }
         for delegate in liveMirrorDelegates {
             delegate.activeStreamManager(self, didEndStream: message)
         }

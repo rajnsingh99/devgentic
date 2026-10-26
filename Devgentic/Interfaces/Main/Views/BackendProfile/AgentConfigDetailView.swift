@@ -589,7 +589,6 @@ struct AgentConfigDetailView: View {
                         )
                         .frame(minHeight: 120)
                         .padding(8)
-                        .scrollContentBackground(.hidden)
                         .background(theme.textBackground)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                         .overlay(

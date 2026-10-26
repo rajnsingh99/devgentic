@@ -548,12 +548,9 @@ private struct PermissionInteractionBanner: View {
                         decide(approved: false)
                     }
 
-                    // "Allow for this chat" trusts this tool for the rest of this conversation (persisted), not the shared profile.
-                    // Hidden for destructive tools, which always prompt.
-                    if confirmation.risk != .destructive {
-                        HITLActionButton(label: "Allow for this chat", icon: "checkmark.circle", style: .ghost, isDisabled: !editsValid) {
-                            allowForThisConversation()
-                        }
+                    // Standing approvals sit in one menu so the banner keeps two buttons. Each option is offered only where it applies.
+                    if !standingOptions.isEmpty {
+                        standingApprovalMenu
                     }
 
                     // Allow has no Return shortcut: the chat input claims Return window-wide, so it could approve mid-sentence.
@@ -572,6 +569,56 @@ private struct PermissionInteractionBanner: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .appSurface(in: .rect(cornerRadius: 16), elevation: .elevated)
+    }
+
+    // MARK: Standing approvals
+
+    /// Which standing approvals this request may offer; an exact-call grant covers the user's edits when editing.
+    private var standingOptions: StandingApprovalOptions {
+        StandingApprovalOptions(for: pending, editedArguments: buildEditedArguments())
+    }
+
+    private var standingApprovalMenu: some View {
+        let options = standingOptions
+        return Menu {
+            if let canonical = options.exactCallArguments {
+                Button {
+                    allowForRun(.exactCall(canonicalArguments: canonical))
+                } label: {
+                    Label("Allow this exact call for this run", systemImage: "checkmark.seal")
+                }
+            }
+            if options.canAllowToolForRun {
+                Button {
+                    allowForRun(.anyArguments)
+                } label: {
+                    Label("Allow \(confirmation.toolName) for this run", systemImage: "checkmark.circle")
+                }
+            }
+            if options.canAllowForChat {
+                if options.canAllowExactCallForRun || options.canAllowToolForRun { Divider() }
+                Button {
+                    allowForThisConversation()
+                } label: {
+                    Label("Allow for this chat", systemImage: "bubble.left.and.text.bubble.right")
+                }
+            }
+        } label: {
+            Label("Allow…", systemImage: "checkmark.circle")
+                .font(.system(.caption, weight: .medium))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.visible)
+        .fixedSize()
+        .disabled(!editsValid)
+        .help("Approve this request and keep approving matching ones")
+        .accessibilityLabel("More ways to allow")
+    }
+
+    private func allowForRun(_ approval: RunApproval) {
+        guard !isProcessing else { return }
+        withAnimation { isProcessing = true }
+        vm.allowToolForRun(pending, approval: approval, editedArguments: buildEditedArguments())
     }
 
     /// Trusts this tool for the rest of this conversation (persisted, scoped to this chat), then approves the request.
@@ -903,7 +950,8 @@ private struct GateInteractionBanner: View {
         }
         .frame(maxHeight: 120)
         .background(RoundedRectangle(cornerRadius: 10).fill(theme.surfaceOverlay.opacity(0.35)))
-        .accessibilityLabel("Input being routed: \(input)")
+        // Highlights exist only for a Router arbitration; a Gate node's input is up for approval, not routing.
+        .accessibilityLabel(gate.highlights.isEmpty ? "Input awaiting your decision: \(input)" : "Input being routed: \(input)")
     }
 
     private func gateButton(_ option: String) -> some View {

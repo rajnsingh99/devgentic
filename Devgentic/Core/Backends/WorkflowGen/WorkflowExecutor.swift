@@ -2747,6 +2747,13 @@ actor WorkflowExecutor: Executor {
 
             let deadline = gateTimeout.map { Date().addingTimeInterval($0) }
 
+            // The approver must see what they are approving: without it the banner shows only the prompt. Capped, as the ChatOps
+            // mirror folds it into one chat message; the chosen branch still receives the full text.
+            let reviewText = Self.gateReviewText(upstreamText)
+            if reviewText.count < upstreamText.count {
+                logger.info("[WF_EXEC] Gate '\(displayName)' [node \(nodeID.uuidString.prefix(8))] review text truncated from \(upstreamText.count) to \(Self.gateReviewTextLimit) chars. CONSEQUENCE: the approver sees only the start of the input; the chosen branch still receives all of it.")
+            }
+
             // Emit the structured gate request — options render as one-tap buttons, `deadline` drives a
             // live countdown in the banner.
             continuation.yield(.requestGate(
@@ -2754,7 +2761,8 @@ actor WorkflowExecutor: Executor {
                 options: config.options,
                 operationID: operationID,
                 deadline: deadline,
-                sourceNodeID: nodeID
+                sourceNodeID: nodeID,
+                inputText: reviewText.isEmpty ? nil : reviewText
             ))
 
             logger.info("Gate node '\(displayName)' suspending for choice (operationID: \(operationID), options: [\(config.options.joined(separator: " | "))], timeout: \(gateTimeout.map { "\($0)s" } ?? "indefinite — container-bounded"))")
@@ -2899,13 +2907,14 @@ actor WorkflowExecutor: Executor {
             // Confirmation: Action nodes bypass `ToolExecutionMediator`, so HITL is raised here. Gate on the resolved tool, not on
             // `toolRef`'s frozen snapshot. The user approves the resolved arguments; the exportable trace event keeps names only.
             if agentTool.requiresConfirmation {
-                // Scoped to THIS node: a grant given in another node of the same run is not an
-                // answer here, because nodes configure their tools independently.
+                // A durable "allow for this chat" grant is scoped to THIS node, since nodes configure their tools independently.
+                // A run grant covers every node of the run: the user approved it for the run, not for one node.
                 let alreadyAllowed = await SessionToolApprovals.shared.isAllowed(
-                    toolName: toolRef.name, conversationID: conversationID, nodeID: nodeID
+                    toolName: toolRef.name, conversationID: conversationID, nodeID: nodeID,
+                    canonicalArguments: SessionToolApprovals.canonicalArguments(json: argsData)
                 )
                 if alreadyAllowed {
-                    logger.info("Action node '\(displayName)': '\(toolRef.name)' auto-approved via this node's allowlist — no banner.")
+                    logger.info("Action node '\(displayName)': '\(toolRef.name)' auto-approved by a standing grant (this run's, or this node's chat grant) — no banner.")
                 } else if !WorkflowRunAttendance.canReachAHuman {
                     // Nobody to ask in a scheduled run (no banner, no remote channel): refuse the tool fast and fail the node onto its
                     // `error` port unless the per-node setting opts in. A ChatOps run differs: `RemoteMirrorService` mirrors the request.
@@ -3301,6 +3310,19 @@ actor WorkflowExecutor: Executor {
     /// the field trimmed of surrounding whitespace and newlines. Case is not folded.
     nonisolated static func routerWholeValue(_ field: String) -> String {
         field.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The most of a Gate's input shown to the approver. Leaves room for the prompt inside one remote chat message
+    /// (Telegram's limit is 4096).
+    nonisolated static let gateReviewTextLimit = 3000
+
+    /// A Gate's input as shown to the approver: in full up to `gateReviewTextLimit`, otherwise the start plus a marker
+    /// saying how much is hidden, so a cut never reads as the whole input.
+    nonisolated static func gateReviewText(_ input: String) -> String {
+        guard input.count > gateReviewTextLimit else { return input }
+        let hidden = input.count - gateReviewTextLimit
+        return String(input.prefix(gateReviewTextLimit))
+            + "\n\n… [\(hidden) more characters not shown — the chosen branch receives the full input]"
     }
 
     /// How a Gate that ended with no option settles.

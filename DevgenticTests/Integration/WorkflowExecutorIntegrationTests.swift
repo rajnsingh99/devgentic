@@ -1943,9 +1943,9 @@ final class WorkflowExecutorIntegrationTests: XCTestCase {
                        "`contains` still highlights")
     }
 
-    /// An ordinary Gate node carries no input and no spans — the new fields must stay empty rather
-    /// than leaking a Router concept into every gate.
-    func testOrdinaryGate_CarriesNoInputOrHighlights() async throws {
+    /// An ordinary Gate node shows the approver its upstream input, but carries no highlight spans — those are a Router
+    /// arbitration concept and must not leak into every gate.
+    func testOrdinaryGate_CarriesItsInputButNoHighlights() async throws {
         let scenario = WorkflowTestScenario()
         let source = scenario.addBotNode(name: "Source")
         let gate = scenario.addGateNode(name: "Approve?", options: ["Yes", "No"])
@@ -1959,8 +1959,44 @@ final class WorkflowExecutorIntegrationTests: XCTestCase {
         let events = try await executeWithGate(scenario, choosing: "Yes")
         let request = try XCTUnwrap(WorkflowStreamCollector.gateRequests(from: events).first)
 
-        XCTAssertNil(request.inputText)
+        XCTAssertEqual(request.inputText, "data", "the approver must see what they are approving")
         XCTAssertTrue(request.highlights.isEmpty)
+    }
+
+    /// Two parallel upstreams feeding one Gate: the approver sees BOTH outputs, not just the prompt.
+    func testGate_FedByTwoUpstreams_ShowsBothInputsToTheApprover() async throws {
+        let scenario = WorkflowTestScenario()
+        let first = scenario.addBotNode(name: "File Mover")
+        let second = scenario.addBotNode(name: "Instrumentation")
+        let gate = scenario.addGateNode(name: "Approve?", options: ["Yes", "No"])
+        let yes = scenario.addBotNode(name: "Yes Arm")
+        scenario.connect(from: first, to: gate)
+        scenario.connect(from: second, to: gate)
+        scenario.connect(from: gate, to: yes, portLabel: "Yes")
+
+        mockProvider.scriptStream(for: scenario.profileID(for: first)!, events: [.content("moved 3 files")])
+        mockProvider.scriptStream(for: scenario.profileID(for: second)!, events: [.content("latency p95 120ms")])
+        mockProvider.scriptStream(for: scenario.profileID(for: yes)!, events: [.content("ok")])
+
+        let events = try await executeWithGate(scenario, choosing: "Yes")
+        let input = try XCTUnwrap(WorkflowStreamCollector.gateRequests(from: events).first?.inputText)
+
+        XCTAssertTrue(input.contains("moved 3 files"), "first upstream missing from the review text: \(input)")
+        XCTAssertTrue(input.contains("latency p95 120ms"), "second upstream missing from the review text: \(input)")
+    }
+
+    func testGateReviewText_ShortInputIsShownInFull() {
+        let input = String(repeating: "a", count: WorkflowExecutor.gateReviewTextLimit)
+        XCTAssertEqual(WorkflowExecutor.gateReviewText(input), input)
+    }
+
+    func testGateReviewText_LongInputIsCutAndSaysHowMuchIsHidden() {
+        let input = String(repeating: "a", count: WorkflowExecutor.gateReviewTextLimit + 250)
+        let shown = WorkflowExecutor.gateReviewText(input)
+
+        XCTAssertTrue(shown.hasPrefix(String(repeating: "a", count: WorkflowExecutor.gateReviewTextLimit)))
+        XCTAssertTrue(shown.contains("250 more characters not shown"), "the cut must be visible: \(shown.suffix(120))")
+        XCTAssertLessThan(shown.count, input.count)
     }
 
     // MARK: - Retries: per-node, and only where retrying is safe

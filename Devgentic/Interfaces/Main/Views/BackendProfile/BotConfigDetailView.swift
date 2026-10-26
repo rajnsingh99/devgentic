@@ -331,24 +331,24 @@ struct BotConfigDetailView: View {
                 }
 
                 ZStack(alignment: .topLeading) {
-                    TextEditor(text: instructionsBinding)
-                        .font(theme.fontCode)
-                        .disableAutocorrection(true)
-                        .frame(minHeight: 120)
-                        .padding(8)
-                        .scrollContentBackground(.hidden)
-                        .background(theme.textBackground)
-                        .foregroundColor(theme.primaryText)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(instructionsError != nil ? theme.errorColor : theme.dividerColor,
-                                        lineWidth: instructionsError != nil ? 1.5 : 1)
-                        )
-                        .onChange(of: instructionsBinding.wrappedValue) { _, _ in
-                            // Clear the validation error as soon as the user starts editing.
-                            instructionsError = nil
-                        }
+                    TokenizingTextEditor(
+                        text: instructionsBinding,
+                        theme: theme,
+                        allowsToolMentions: false
+                    )
+                    .frame(minHeight: 120)
+                    .padding(8)
+                    .background(theme.textBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(instructionsError != nil ? theme.errorColor : theme.dividerColor,
+                                    lineWidth: instructionsError != nil ? 1.5 : 1)
+                    )
+                    .onChange(of: instructionsBinding.wrappedValue) { _, _ in
+                        // Clear the validation error as soon as the user starts editing.
+                        instructionsError = nil
+                    }
 
                     if instructionsBinding.wrappedValue.isEmpty {
                         Text("Enter system instructions for your bot here...")

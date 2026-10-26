@@ -414,11 +414,14 @@ private func executeSingleTool(
 
     switch dispatchOutcome {
     case .requiresConfirmation(let ps):
-        // HITL: if the user chose "Allow for this chat" for this tool, the banner is skipped. The grant is durable and scoped
-        // to the conversation (and to `approvalNodeID` inside a workflow).
-        if await SessionToolApprovals.shared.isAllowed(toolName: toolName, conversationID: conversationID, nodeID: approvalNodeID) {
-            let scope = approvalNodeID.map { "node \($0)" } ?? "conversation"
-            logger.info("[HITL] '\(toolName)' auto-approved via the \(scope)-scoped allowlist (\"Allow for this chat\") — skipping banner.")
+        // HITL: the banner is skipped when this run allowed the tool (or this exact call), or the user chose "Allow for this
+        // chat" (durable, scoped to the conversation and to `approvalNodeID` inside a workflow). Exact-call grants match on
+        // the canonical form of the same `arguments` the banner was built from.
+        if await SessionToolApprovals.shared.isAllowed(
+            toolName: toolName, conversationID: conversationID, nodeID: approvalNodeID,
+            canonicalArguments: SessionToolApprovals.canonicalArguments(arguments)
+        ) {
+            logger.info("[HITL] '\(toolName)' auto-approved by a standing grant — skipping banner.")
         } else if await interactionMemory.isDenied(toolName: toolName, params: paramsString) {
             // Loop safety: an identical already-declined request is auto-denied without a banner, with an observation identical
             // to a manual denial; a request with different arguments still reaches the user.

@@ -439,6 +439,21 @@ final class QuickAccessSessionViewModel {
         }
     }
 
+    /// Approves a tool confirmation and allows matching calls for the rest of its run, through the same path as the main
+    /// window's banner.
+    func allowToolForRun(_ pending: PendingHITL, approval: RunApproval) {
+        let detail: String = {
+            let tool: String = { if case .toolConfirmation(let c) = pending.kind { return c.toolName }; return "?" }()
+            if case .exactCall = approval {
+                return "tool \(tool), run grant for THIS EXACT CALL — the identical call will not ask again until the run ends"
+            }
+            return "tool \(tool), run grant for ANY ARGUMENTS — this tool will not ask again until the run ends"
+        }()
+        submitHITL("APPROVED", operationID: pending.id, detail: detail) {
+            $0.allowToolForRun(pending, approval: approval)
+        }
+    }
+
     func denyTool(_ pending: PendingHITL) {
         submitHITL("DENIED", operationID: pending.id,
                    detail: "the tool does not run and the agent is told the user refused") {

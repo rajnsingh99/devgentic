@@ -526,7 +526,7 @@ struct AdvancedPromptEditorView: View {
                 theme: theme,
                 promptLibraryVM: promptLibraryVM
             )
-            .padding(10)
+            .padding(8)
             .scrollContentBackground(.hidden)
 
             if localText.isEmpty {
@@ -725,7 +725,22 @@ struct TokenizingTextEditor: NSViewRepresentable {
     @Binding var text: String
     @Binding var configuredTools: [Tool]
     var theme: Theme
-    var promptLibraryVM: PromptEditViewModel
+    var promptLibraryVM: PromptEditViewModel?
+    var allowsToolMentions: Bool
+
+    init(
+        text: Binding<String>,
+        configuredTools: Binding<[Tool]> = .constant([]),
+        theme: Theme,
+        promptLibraryVM: PromptEditViewModel? = nil,
+        allowsToolMentions: Bool = true
+    ) {
+        self._text = text
+        self._configuredTools = configuredTools
+        self.theme = theme
+        self.promptLibraryVM = promptLibraryVM
+        self.allowsToolMentions = allowsToolMentions
+    }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -741,8 +756,9 @@ struct TokenizingTextEditor: NSViewRepresentable {
         textView.isRichText = false
         textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
         textView.textColor = NSColor(theme.primaryText)
-        textView.backgroundColor = NSColor(theme.secondaryBackground)
-        textView.drawsBackground = true
+        textView.insertionPointColor = NSColor(theme.primaryText)
+        textView.backgroundColor = .clear
+        textView.drawsBackground = false
         
         textView.delegate = context.coordinator
         textView.textStorage?.delegate = context.coordinator
@@ -754,6 +770,7 @@ struct TokenizingTextEditor: NSViewRepresentable {
         textView.allowsUndo = true
         
         textView.textContainerInset = NSSize(width: 8, height: 8)
+        textView.textContainer?.lineFragmentPadding = 0
 
         scrollView.documentView = textView
 
@@ -780,7 +797,7 @@ struct TokenizingTextEditor: NSViewRepresentable {
         
         // Ensure theme colors are applied on update
         textView.textColor = NSColor(theme.primaryText)
-        textView.backgroundColor = NSColor(theme.secondaryBackground)
+        textView.insertionPointColor = NSColor(theme.primaryText)
     }
 
     @MainActor
@@ -818,6 +835,8 @@ struct TokenizingTextEditor: NSViewRepresentable {
             ]
             textStorage.setAttributes(defaultAttributes, range: fullRange)
             
+            guard parent.allowsToolMentions else { return }
+
             // To properly highlight, we should highlight ANY configured tool to keep visuals in sync.
             let toolNames = parent.configuredTools.map { $0.name }
             guard !toolNames.isEmpty else { return }
@@ -930,7 +949,7 @@ struct TokenizingTextEditor: NSViewRepresentable {
                 return
             }
 
-            if lastWord.hasPrefix("@") {
+            if parent.allowsToolMentions && lastWord.hasPrefix("@") {
                 closePromptPopover()
                 let mentionLocation = selectedRange.location - lastWord.count
                 activeMentionRange = NSRange(location: mentionLocation, length: lastWord.count)

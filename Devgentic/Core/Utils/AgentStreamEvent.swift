@@ -616,12 +616,12 @@ struct PendingGate: Sendable, Identifiable, Codable, Equatable {
     let options: [String]       // the choices; each maps to an output port of the same label
     let deadline: Date?         // absolute expiry time for the live countdown (nil = indefinite); expiry fails the node, it never rejects
 
-    /// The text the decision is about, when there is one (Router ambiguity arbitration). Carried in
-    /// the payload rather than re-read anywhere, because `highlights` is measured against exactly
-    /// this string. `nil` for an ordinary Gate, which has no input to show.
+    /// The text the decision is about: a Router's arbitration input, or a Gate node's upstream input (capped, see
+    /// `WorkflowExecutor.gateReviewText`). Carried in the payload rather than re-read anywhere, because `highlights` is
+    /// measured against exactly this string. `nil` when there is no input to show.
     let inputText: String?
 
-    /// Which rule matched which part of `inputText`. Empty for an ordinary Gate, and empty for
+    /// Which rule matched which part of `inputText`. Empty for a Gate node, and empty for
     /// operators that have no locatable span (`equals` gives only the whole field; `does not
     /// contain` / `is empty` / `always` match by absence or unconditionally).
     let highlights: [RuleMatchSpan]

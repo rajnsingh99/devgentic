@@ -132,6 +132,47 @@ final class BackendProfileService {
         return advisories
     }
 
+    // Why: a rename is an out-of-band write while the editor may hold the profile open; the draft must take the new name too,
+    // or its stale name lights Save and the next editor or canvas save reverts the rename.
+    /// Renames a shared profile, writing from the store's copy so no other field is reverted.
+    /// Throws `ProfileStoreError.validationFailed` for an empty name or one another shared profile already uses (case-insensitive).
+    @discardableResult
+    func renameProfile(withId id: UUID, to newName: String) throws -> BackendProfileModel {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw ProfileStoreError.validationFailed([
+                ProfileValidationError(field: "displayName", message: "A profile name can't be empty.")
+            ])
+        }
+        let lower = trimmed.lowercased()
+        if sharedProfiles.contains(where: { $0.id != id && $0.displayName.lowercased() == lower }) {
+            throw ProfileStoreError.validationFailed([
+                ProfileValidationError(field: "displayName", message: "A profile named '\(trimmed)' already exists.")
+            ])
+        }
+        guard var profile = freshProfile(id: id) else {
+            logger.error(
+                "[PROFILE] renameProfile found no profile \(id) in the store or in memory. "
+                + "CONSEQUENCE: the rename to '\(trimmed)' is not applied."
+            )
+            throw ProfileStoreError.fetchFailed(
+                underlying: NSError(domain: "BackendProfileService", code: 404,
+                                    userInfo: [NSLocalizedDescriptionKey: "The profile no longer exists."])
+            )
+        }
+        guard profile.displayName != trimmed else { return profile }
+
+        let oldName = profile.displayName
+        profile.displayName = trimmed
+        try saveProfile(profile)
+        if let buffer = editBuffer, buffer.draft.id == id {
+            buffer.draft.displayName = trimmed
+        }
+        rebaseEditBuffer(to: profile)
+        logger.info("[PROFILE] Renamed '\(oldName)' → '\(trimmed)' (\(id.uuidString.prefix(8))).")
+        return profile
+    }
+
     // Why: call only after a successful layout write; an empty or partial referenced set deletes every node's configuration.
     /// Deletes the private profile rows of nodes whose configuration no node on the workflow's canvas references.
     /// Pass `referencedProfileIDs` unioned with `WorkflowCanvasState.undoRecoverableProfileIDs`.

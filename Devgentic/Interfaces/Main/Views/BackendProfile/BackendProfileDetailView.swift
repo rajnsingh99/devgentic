@@ -247,8 +247,13 @@ struct ProfileRowView: View {
     let onSelect: () -> Void
     let onDuplicate: () -> Void
     let onDelete: () -> Void
+    /// Persists a new name; returns false when the rename was refused, which keeps the field open with the user's text.
+    let onRename: (String) -> Bool
 
     @State private var isHovering = false
+    @State private var isRenaming = false
+    @State private var editableName = ""
+    @FocusState private var isRenameFieldFocused: Bool
     @Environment(\.appTheme) private var theme
 
     var body: some View {
@@ -261,23 +266,27 @@ struct ProfileRowView: View {
             )
             .frame(width: 24)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(profile.displayName)
-                    .font(theme.fontFootnote.weight(.medium))
-                    .foregroundColor(theme.primaryText)
-                Text(profile.profileType.localizedTitle)
-                    .font(.system(.caption))
-                    .foregroundColor(theme.secondaryText)
+            if isRenaming {
+                renameField
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(profile.displayName)
+                        .font(theme.fontFootnote.weight(.medium))
+                        .foregroundColor(theme.primaryText)
+                    Text(profile.profileType.localizedTitle)
+                        .font(.system(.caption))
+                        .foregroundColor(theme.secondaryText)
+                }
+
+                Spacer()
             }
-            
-            Spacer()
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .sidebarRowBackground(isSelected: isSelected, isHovering: isHovering || isFocused)
         .overlay(alignment: .trailing) {
-            if isHovering {
+            if isHovering && !isRenaming {
                 HoverActionButton(
                     icon: "trash",
                     tint: .red.opacity(0.8),
@@ -289,17 +298,24 @@ struct ProfileRowView: View {
             }
         }
         .contentShape(Rectangle())
-        .pointingHandCursor()
+        .pointingHandCursor(enabled: !isRenaming)
         // `accessibilityLabel(_: String)` does not localize; the `Text` overload does, and a
         // nested `Text` keeps the type name translatable inside the composed phrase.
         .accessibilityLabel(Text("\(profile.displayName), \(Text(profile.profileType.localizedTitle))"))
-        .onTapGesture(perform: onSelect)
+        .onTapGesture {
+            if !isRenaming { onSelect() }
+        }
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovering = hovering
             }
         }
         .contextMenu {
+            Button {
+                beginRename()
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
             Button {
                 onDuplicate()
             } label: {
@@ -313,6 +329,64 @@ struct ProfileRowView: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+    }
+
+    /// The inline name editor: Return or the save button commits, Escape cancels.
+    private var renameField: some View {
+        HStack(spacing: 6) {
+            TextField("", text: $editableName, prompt: Text("Profile name").foregroundColor(.secondary.opacity(0.7)))
+                .textFieldStyle(.plain)
+                .font(theme.fontFootnote.weight(.medium))
+                .focused($isRenameFieldFocused)
+                .onSubmit { commitRename() }
+                .onExitCommand(perform: cancelRename)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 8)
+                .background(theme.surfaceOverlayStrong)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+
+            HoverActionButton(
+                icon: "checkmark",
+                tint: theme.accentColor,
+                action: { commitRename() }
+            )
+            .disabled(trimmedEditableName.isEmpty)
+            .help("Save name")
+            .accessibilityLabel("Save name")
+        }
+        .onChange(of: isRenameFieldFocused) { _, focused in
+            // Clicking elsewhere commits, as Finder does; a refused name is dropped rather than re-grabbing focus the user moved.
+            guard !focused, isRenaming else { return }
+            if !commitRename(refocusOnFailure: false) { cancelRename() }
+        }
+    }
+
+    private var trimmedEditableName: String {
+        editableName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func beginRename() {
+        editableName = profile.displayName
+        isRenaming = true
+        // Deferred one turn: the field does not exist until this state change renders.
+        DispatchQueue.main.async { isRenameFieldFocused = true }
+    }
+
+    /// Returns whether the field closed with the name saved (or unchanged).
+    @discardableResult
+    private func commitRename(refocusOnFailure: Bool = true) -> Bool {
+        guard isRenaming, !trimmedEditableName.isEmpty else { return false }
+        if trimmedEditableName == profile.displayName || onRename(trimmedEditableName) {
+            isRenaming = false
+            return true
+        }
+        if refocusOnFailure { isRenameFieldFocused = true }
+        return false
+    }
+
+    private func cancelRename() {
+        isRenaming = false
+        editableName = ""
     }
 
     private func iconName(for type: ProfileType) -> String {

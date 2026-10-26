@@ -341,12 +341,12 @@ struct SimplePromptEditorView: View {
     // MARK: - Inset Editor Canvas
     private var editorCanvasView: some View {
         ZStack(alignment: .topLeading) {
-            TextEditor(text: $localText)
-                .font(theme.fontCode)
-                .foregroundColor(theme.primaryText)
-                .disableAutocorrection(true)
-                .padding(10)
-                .scrollContentBackground(.hidden)
+            TokenizingTextEditor(
+                text: $localText,
+                theme: theme,
+                allowsToolMentions: false
+            )
+            .padding(8)
 
             if localText.isEmpty {
                 Text("Enter system instructions for \(botName) here...")

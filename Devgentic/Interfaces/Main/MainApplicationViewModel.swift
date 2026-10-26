@@ -650,6 +650,32 @@ final class MainApplicationViewModel {
         messagingCoordinator.submitToolApproval(operationID: operationID, approved: approved, editedArguments: editedArguments)
     }
 
+    // Why: the grant is registered before any resume, so a call raised the moment this one runs already sees it; queued
+    // requests it covers are answered too, or parallel workflow nodes would each still need a click. One path for every
+    // banner that offers it.
+    /// Approves `pending` and allows matching calls for the rest of its run, in every node.
+    func allowToolForRun(_ pending: PendingHITL, approval: RunApproval, editedArguments: [String: JSONValue]? = nil) {
+        guard case .toolConfirmation(let confirmation) = pending.kind, let runID = pending.origin.runMessageID else {
+            logger.error("[HITL] 'allow for this run' on op \(pending.id.uuidString.prefix(8)), which is not a tool confirmation raised inside a run. CONSEQUENCE: nothing was granted or approved; the banner stays until answered another way.")
+            return
+        }
+        let conversationID = pending.origin.conversationID
+        Task { @MainActor in
+            await SessionToolApprovals.shared.allowForRun(
+                approval, toolName: confirmation.toolName, risk: confirmation.risk,
+                conversationID: conversationID, runID: runID)
+            let covered = SessionToolApprovals.pendingCovered(
+                by: approval, toolName: confirmation.toolName, conversationID: conversationID, runID: runID,
+                in: interactionCenter.pending, excluding: pending.id)
+            let kind = if case .exactCall = approval { "EXACT CALL" } else { "ANY ARGUMENTS" }
+            logger.info("[HITL] '\(confirmation.toolName)' ALLOW-FOR-RUN (\(kind)) by user [op \(pending.id.uuidString.prefix(8)), run \(runID.uuidString.prefix(8))]\(covered.isEmpty ? "" : " — also approving \(covered.count) queued request(s) it covers")")
+            submitToolApproval(operationID: pending.id, approved: true, editedArguments: editedArguments)
+            for operationID in covered {
+                submitToolApproval(operationID: operationID, approved: true)
+            }
+        }
+    }
+
     func submitClarificationResponse(operationID: UUID, response: String?) {
         messagingCoordinator.submitClarificationResponse(operationID: operationID, response: response)
     }

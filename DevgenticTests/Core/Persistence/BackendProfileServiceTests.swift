@@ -174,4 +174,68 @@ final class BackendProfileServiceTests: XCTestCase {
         service.editBuffer!.revert()
         XCTAssertFalse(service.editBuffer!.isDirty)
     }
+
+    // MARK: - Rename
+
+    func testRenamePersistsTrimmedName() throws {
+        let id = service.profiles[0].id
+        try service.renameProfile(withId: id, to: "  Gamma  ")
+
+        XCTAssertEqual(store.profiles.first(where: { $0.id == id })?.displayName, "Gamma")
+        XCTAssertEqual(service.profiles.first(where: { $0.id == id })?.displayName, "Gamma")
+    }
+
+    func testRenameRefusesEmptyName() {
+        let id = service.profiles[0].id
+        XCTAssertThrowsError(try service.renameProfile(withId: id, to: "   "))
+        XCTAssertEqual(store.saveCallCount, 0)
+        XCTAssertEqual(store.profiles.first(where: { $0.id == id })?.displayName, "Alpha")
+    }
+
+    func testRenameRefusesAnotherProfilesNameCaseInsensitively() {
+        let id = service.profiles[0].id
+        XCTAssertThrowsError(try service.renameProfile(withId: id, to: "beta"))
+        XCTAssertEqual(store.saveCallCount, 0)
+    }
+
+    func testRenameAllowsChangingOnlyTheCaseOfItsOwnName() throws {
+        let id = service.profiles[0].id
+        try service.renameProfile(withId: id, to: "ALPHA")
+        XCTAssertEqual(store.profiles.first(where: { $0.id == id })?.displayName, "ALPHA")
+    }
+
+    /// The open editor must take the new name, or its stale draft lights Save and the next save reverts the rename.
+    func testRenameOfOpenProfileUpdatesDraftWithoutDirtyingIt() throws {
+        let id = service.profiles[0].id
+        service.activateEditBuffer(for: id)
+
+        try service.renameProfile(withId: id, to: "Gamma")
+
+        XCTAssertEqual(service.editBuffer?.draft.displayName, "Gamma")
+        XCTAssertFalse(service.editBuffer?.isDirty ?? true)
+    }
+
+    /// Unsaved editor work survives a sidebar rename, and saving it afterwards keeps the new name.
+    func testRenameOfOpenProfileKeepsUnsavedEditsAndTheirSaveKeepsTheName() throws {
+        let id = service.profiles[0].id
+        service.activateEditBuffer(for: id)
+        let editedDetails = makeBot(modelName: "qwen3").details
+        service.editBuffer!.draft.details = editedDetails
+
+        try service.renameProfile(withId: id, to: "Gamma")
+
+        XCTAssertTrue(service.editBuffer!.isDirty)
+        XCTAssertEqual(store.profiles.first(where: { $0.id == id })?.details, makeBot().details)
+
+        try service.saveProfile(service.editBuffer!.draft)
+        let saved = store.profiles.first(where: { $0.id == id })
+        XCTAssertEqual(saved?.displayName, "Gamma")
+        XCTAssertEqual(saved?.details, editedDetails)
+    }
+
+    func testRenameOfAnotherProfileLeavesOpenDraftAlone() throws {
+        service.activateEditBuffer(for: service.profiles[0].id)
+        try service.renameProfile(withId: service.profiles[1].id, to: "Gamma")
+        XCTAssertEqual(service.editBuffer?.draft.displayName, "Alpha")
+    }
 }

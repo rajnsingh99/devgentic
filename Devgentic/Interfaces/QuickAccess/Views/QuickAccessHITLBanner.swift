@@ -116,11 +116,10 @@ struct QuickAccessHITLBanner: View {
             }
             HStack(spacing: 8) {
                 actionButton("Deny", color: theme.secondaryText, filled: false) { session.denyTool(pending) }
-                // "Allow for this chat" is hidden for destructive tools (always re-prompt).
-                if c.risk != .destructive {
-                    actionButton("Allow for chat", color: theme.accentColor, filled: false) {
-                        session.approveTool(pending, allowForChat: true)
-                    }
+                // The same standing approvals as the main window's banner, in one menu for this compact panel.
+                let options = StandingApprovalOptions(for: pending)
+                if !options.isEmpty {
+                    standingApprovalMenu(c, options: options)
                 }
                 Spacer(minLength: 0)
                 actionButton(c.risk == .destructive ? "Allow anyway" : "Approve",
@@ -130,6 +129,36 @@ struct QuickAccessHITLBanner: View {
                 }
             }
         }
+    }
+
+    private func standingApprovalMenu(_ c: PendingToolConfirmation, options: StandingApprovalOptions) -> some View {
+        Menu {
+            if let canonical = options.exactCallArguments {
+                Button("Allow this exact call for this run") {
+                    session.allowToolForRun(pending, approval: .exactCall(canonicalArguments: canonical))
+                }
+            }
+            if options.canAllowToolForRun {
+                Button("Allow \(c.toolName) for this run") {
+                    session.allowToolForRun(pending, approval: .anyArguments)
+                }
+            }
+            if options.canAllowForChat {
+                if options.canAllowExactCallForRun || options.canAllowToolForRun { Divider() }
+                Button("Allow for this chat") {
+                    session.approveTool(pending, allowForChat: true)
+                }
+            }
+        } label: {
+            Text("Allow…")
+                .font(.system(.caption, weight: .semibold))
+                .foregroundColor(theme.accentColor)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.visible)
+        .fixedSize()
+        .help("Approve this request and keep approving matching ones")
+        .accessibilityLabel("More ways to allow")
     }
 
     // MARK: - Clarification
@@ -203,8 +232,8 @@ struct QuickAccessHITLBanner: View {
                 .foregroundColor(theme.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
 
-            // A Router's ambiguity arbitration carries the text being routed in `inputText`; show it, or the panel would ask
-            // "which branch?" without the input. Plain text: this compact panel has no room for colour-coded spans.
+            // A Router arbitration or a Gate node carries the text the decision is about in `inputText`; show it, or the panel
+            // would ask for a decision without the input. Plain text: this compact panel has no room for colour-coded spans.
             if let input = g.inputText, !input.isEmpty {
                 ScrollView(.vertical, showsIndicators: false) {
                     Text(input)
