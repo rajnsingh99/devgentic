@@ -21,8 +21,8 @@ export const SITE_CONFIG = {
 
   release: {
     published: true,
-    version: "1.0.0",         // e.g. "0.9.0" — shown as a badge once published
-    sha256: "03ea2ece35f94ebe1b8bcf0a5935df27ca72b0fd64816d1ab4dbbb3e8ad0c7e0", // printed by scripts/release.sh; shown beside the download once set
+    version: "1.0.1",         // e.g. "0.9.0" — shown as a badge once published
+    sha256: "6237ddc9b4b9bcb9e44660d832812d29c8237638f60573c9b4c3118473cd650e", // printed by scripts/release.sh; shown beside the download once set
   },
 
   links: {
